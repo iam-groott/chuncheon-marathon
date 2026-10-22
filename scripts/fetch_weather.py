@@ -41,8 +41,14 @@ WIND_CODES = {
     "2": (4.0, "약간 강한 바람(4~9m/s)"),
     "3": (9.0, "강한 바람(9m/s 이상)"),
 }
-REQUEST_TIMEOUT_SEC = 20
+# 기상청 서버가 응답하지 않을 때 오래 붙잡고 있지 않도록 짧게 (최악 한 요청당 약 40초)
+REQUEST_TIMEOUT_SEC = 10
 RETRY_COUNT = 3
+
+
+class ServerUnreachable(Exception):
+    """기상청 서버에 아예 연결되지 않음(시간 초과 등). 이번 수집은 통째로 건너뛰고 기존 자료를 그대로 둔다.
+    ApiError 를 상속하지 않아서, 지점별 오류 처리(except ApiError)에 걸리지 않고 main 까지 올라온다."""
 
 
 class ApiError(Exception):
@@ -100,7 +106,7 @@ def request_with_retry(url):
             last_error = e
             logger.warning("요청 실패(%d/%d): %s", attempt, RETRY_COUNT, e)
             time.sleep(2 * attempt)
-    raise ApiError("요청 재시도 초과: " + str(last_error))
+    raise ServerUnreachable("요청 재시도 초과: " + str(last_error))
 
 
 # ---------- 값 변환 ----------
@@ -320,61 +326,68 @@ def main(course_path, out_path):
         unique[str(cp["nx"]) + "_" + str(cp["ny"])] = (cp["nx"], cp["ny"])
 
     error_count = 0
-    for grid_key in unique:
-        nx = unique[grid_key][0]
-        ny = unique[grid_key][1]
-        grid = grids.get(grid_key, {"nx": nx, "ny": ny, "ncst": {}})
-        ncst = grid.get("ncst", {})
+    try:
+        for grid_key in unique:
+            nx = unique[grid_key][0]
+            ny = unique[grid_key][1]
+            grid = grids.get(grid_key, {"nx": nx, "ny": ny, "ncst": {}})
+            ncst = grid.get("ncst", {})
 
-        # 1) 초단기실황: 최근 몇 시간 중 빠진 시간 채우기
-        for h in range(NCST_BACKFILL_HOURS):
-            base_dt = nb - timedelta(hours=h)
-            key = base_dt.strftime("%Y-%m-%dT%H:%M")
-            if key in ncst and h > 0:
-                continue
+            # 1) 초단기실황: 최근 몇 시간 중 빠진 시간 채우기
+            for h in range(NCST_BACKFILL_HOURS):
+                base_dt = nb - timedelta(hours=h)
+                key = base_dt.strftime("%Y-%m-%dT%H:%M")
+                if key in ncst and h > 0:
+                    continue
+                try:
+                    row = fetch_ncst(service_key, nx, ny, base_dt)
+                except ApiError as e:
+                    logger.error("[%s] 실황 %s 실패: %s", grid_key, key, e)
+                    error_count += 1
+                    break
+                if row:
+                    ncst[key] = row
+
+            # 오래된 실황 정리
+            limit = (nb - timedelta(hours=NCST_KEEP_HOURS)).strftime("%Y-%m-%dT%H:%M")
+            ncst = dict(sorted((k, v) for k, v in ncst.items() if k >= limit))
+            grid["ncst"] = ncst
+
+            # 2) 초단기예보
             try:
-                row = fetch_ncst(service_key, nx, ny, base_dt)
+                ultra = fetch_fcst("getUltraSrtFcst", service_key, nx, ny, ub,
+                                   {"T1H": "temp", "RN1": "rain", "REH": "humid", "WSD": "wind",
+                                    "VEC": "vec", "SKY": "sky", "PTY": "pty"})
+                if ultra:
+                    grid["ultra"] = {"base": ub.strftime("%Y-%m-%dT%H:%M"), "items": dict(sorted(ultra.items()))}
+                else:
+                    logger.warning("[%s] 초단기예보 응답이 비어 있어 이전 자료를 유지합니다.", grid_key)
             except ApiError as e:
-                logger.error("[%s] 실황 %s 실패: %s", grid_key, key, e)
+                logger.error("[%s] 초단기예보 실패: %s", grid_key, e)
                 error_count += 1
-                break
-            if row:
-                ncst[key] = row
 
-        # 오래된 실황 정리
-        limit = (nb - timedelta(hours=NCST_KEEP_HOURS)).strftime("%Y-%m-%dT%H:%M")
-        ncst = dict(sorted((k, v) for k, v in ncst.items() if k >= limit))
-        grid["ncst"] = ncst
+            # 3) 단기예보
+            try:
+                vilage = fetch_fcst("getVilageFcst", service_key, nx, ny, vb,
+                                    {"TMP": "temp", "PCP": "rain", "REH": "humid", "WSD": "wind", "POP": "pop",
+                                     "VEC": "vec", "SKY": "sky", "PTY": "pty", "TMN": "tmn", "TMX": "tmx"})
+                if vilage:
+                    grid["vilage"] = {"base": vb.strftime("%Y-%m-%dT%H:%M"), "items": dict(sorted(vilage.items()))}
+                else:
+                    logger.warning("[%s] 단기예보 응답이 비어 있어 이전 자료를 유지합니다.", grid_key)
+            except ApiError as e:
+                logger.error("[%s] 단기예보 실패: %s", grid_key, e)
+                error_count += 1
 
-        # 2) 초단기예보
-        try:
-            ultra = fetch_fcst("getUltraSrtFcst", service_key, nx, ny, ub,
-                               {"T1H": "temp", "RN1": "rain", "REH": "humid", "WSD": "wind",
-                                "VEC": "vec", "SKY": "sky", "PTY": "pty"})
-            if ultra:
-                grid["ultra"] = {"base": ub.strftime("%Y-%m-%dT%H:%M"), "items": dict(sorted(ultra.items()))}
-            else:
-                logger.warning("[%s] 초단기예보 응답이 비어 있어 이전 자료를 유지합니다.", grid_key)
-        except ApiError as e:
-            logger.error("[%s] 초단기예보 실패: %s", grid_key, e)
-            error_count += 1
-
-        # 3) 단기예보
-        try:
-            vilage = fetch_fcst("getVilageFcst", service_key, nx, ny, vb,
-                                {"TMP": "temp", "PCP": "rain", "REH": "humid", "WSD": "wind", "POP": "pop",
-                                 "VEC": "vec", "SKY": "sky", "PTY": "pty", "TMN": "tmn", "TMX": "tmx"})
-            if vilage:
-                grid["vilage"] = {"base": vb.strftime("%Y-%m-%dT%H:%M"), "items": dict(sorted(vilage.items()))}
-            else:
-                logger.warning("[%s] 단기예보 응답이 비어 있어 이전 자료를 유지합니다.", grid_key)
-        except ApiError as e:
-            logger.error("[%s] 단기예보 실패: %s", grid_key, e)
-            error_count += 1
-
-        grids[grid_key] = grid
-        logger.info("[%s] 실황 %d건, 초단기 %d건, 단기 %d건", grid_key, len(grid["ncst"]),
-                    len(grid.get("ultra", {}).get("items", {})), len(grid.get("vilage", {}).get("items", {})))
+            grids[grid_key] = grid
+            logger.info("[%s] 실황 %d건, 초단기 %d건, 단기 %d건", grid_key, len(grid["ncst"]),
+                        len(grid.get("ultra", {}).get("items", {})), len(grid.get("vilage", {}).get("items", {})))
+    except ServerUnreachable as e:
+        # 서버 장애·점검 등으로 연결 자체가 안 되면 나머지 호출도 같은 결과라서 바로 멈춤.
+        # weather.json 을 저장하지 않으므로 화면의 기준 시각은 마지막 성공 수집 그대로 남음(실제보다 새 자료처럼 보이지 않게)
+        logger.error("기상청 서버에 연결되지 않아 이번 수집을 건너뜁니다. 기존 자료를 유지합니다: %s", e)
+        print("::warning::기상청 서버 응답 없음 - 이번 수집 건너뜀 (기존 자료 유지)")
+        return
 
     # 매번 저장 → updatedAt(화면 상단 기준 시각)이 수집할 때마다 갱신됨
     result = {
