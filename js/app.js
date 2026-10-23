@@ -192,11 +192,16 @@
     renderPointTabs();
     initMap();
     bindControls();
+    bindTour();
     renderAidList();
     renderWxLegend();
     loadCctv();
     renderRangeTabs();
     selectPoint(state.pointId, false);
+    // 처음 방문한 사람에게만 사용 안내를 자동으로 한 번 보여 줌
+    if (!tourSeen('weather')) {
+      setTimeout(startTour, 600);
+    }
   }
 
   // 시간별 예보 이동 버튼: 이미 오늘이 됐거나 지난 날의 버튼은 숨김 (오늘은 '현재'와 같으므로 필요 없음)
@@ -490,6 +495,10 @@
       courseLayer.addTo(map);
       $('#aidLegend').prop('hidden', false);
       renderProfile(); // 화면에 보일 때 그려야 너비를 알 수 있음
+      // 풀코스 정보를 처음 열었으면 이 탭 안내를 한 번 보여 줌
+      if (!tourSeen('course')) {
+        setTimeout(startTour, 400);
+      }
     } else {
       map.removeLayer(courseLayer);
       $('#aidLegend').prop('hidden', true);
@@ -700,6 +709,162 @@
         video.play().catch(function () { /* 자동 재생이 막히면 재생 버튼으로 */ });
       });
     }).fail(showCctvError);
+  }
+
+  // ---------- 사용 안내 (코치마크) ----------
+  // 화면을 어둡게 덮고, 기능 하나를 흰 테두리로 강조한 뒤 선으로 설명 글을 이어 줌.
+  // 화면 아무 곳이나 누르면 다음, 아래 점을 누르면 그 단계로, 노란 X 로 닫기.
+  // view: 그 단계를 보여 줄 화면(weather/course), target: 강조할 요소, round: 동그랗게 강조
+  // 탭(화면)마다 따로 보여 주는 안내. ? 버튼을 누르면 지금 보고 있는 탭의 안내가 나옴
+  const TOURS = {
+    weather: [
+      { target: '#pointTabs', text: '지점을 누르면\n그 지점의 현재 날씨와\n시간별 예보로 바뀌어요.' },
+      { target: '.map-box', text: '지도에서 지점별\n기온·강수·풍속을 한눈에 볼 수 있어요.\n숫자 색은 아래 범례 기준이에요.' },
+      { target: '.now', text: '선택한 지점의 지금 날씨예요.\n기온·강수·습도·풍속을\n범례 색으로 보여 줘요.' },
+      { target: '.tl-wrap', text: '표를 옆으로 밀면\n시간별 날씨를 볼 수 있어요.\n빨간 점선 칸이 대회 시간(07~15시)이에요.' },
+      { target: '#viewTabs button[data-view=course]', text: '풀코스 정보에서\n고저도·CP·CCTV를 볼 수 있어요.' },
+      { target: '#helpOpen', round: true, text: '이 안내는 언제든\n? 버튼으로 다시 볼 수 있어요.' }
+    ],
+    course: [
+      { target: '#aidToggle', side: 'right', text: 'CP 버튼으로\n급수대·스펀지 위치를\n켜고 끌 수 있어요.\n번호 마커를 누르면\n거리·고도, 현재 날씨,\n제공 품목이 나와요.' },
+      { target: '#cctvToggle', require: '#cctvToggle', side: 'right', text: 'CCTV 버튼으로\n도로 CCTV 위치를\n켜고 끌 수 있어요.\n카메라 마커를 누르면\n실시간 영상이 나와요.' },
+      { target: '.map-box', text: '지도에서 코스 선을 누르면\n그 지점의 거리와 고도가 표시돼요.' },
+      { target: '#profWrap', text: '고저도를 손가락으로 밀면\n지도에 위치가 따라 움직여요.' },
+      { target: '#aidList li:first-child', text: 'CP 정보 표의 줄을 누르면\n지도에서 그 CP 위치와\n날씨·제공 품목이 열려요.' },
+      { target: '#resetBtn', text: '초기화를 누르면\n지도와 선택이 처음 상태로 돌아가요.' },
+      { target: '#helpOpen', round: true, text: '이 안내는 언제든\n? 버튼으로 다시 볼 수 있어요.' }
+    ]
+  };
+  // 탭별로 '봤음'을 따로 기억 (예: ccm2026-tour-weather)
+  const TOUR_KEY = 'ccm2026-tour-';
+  let tourIndex = 0;
+  let tourView = 'weather';
+
+  // 브라우저 저장소는 막혀 있을 수 있어서(사파리 개인정보 보호 모드 등) 실패해도 그냥 넘어감
+  function tourSeen(view) {
+    try {
+      return window.localStorage.getItem(TOUR_KEY + view) === '1';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function markTourSeen(view) {
+    try {
+      window.localStorage.setItem(TOUR_KEY + view, '1');
+    } catch (e) {
+      // 저장 못 하면 다음 방문 때 한 번 더 보일 뿐이라 무시
+    }
+  }
+
+  // 이번 안내에 쓸 단계 (require 대상이 숨겨져 있으면 그 단계는 뺌. 예: cctv.json 이 없어 CCTV 버튼이 없을 때)
+  let tourSteps = [];
+
+  function startTour() {
+    closeCctv();
+    tourIndex = 0;
+    tourView = state.view;
+    tourSteps = $.grep(TOURS[tourView], function (step) {
+      return !step.require || !$(step.require).prop('hidden');
+    });
+    const $dots = $('#tourDots').empty();
+    $.each(tourSteps, function (i) {
+      $dots.append($('<button type="button" class="tour-dot"></button>')
+        .attr('data-i', i).attr('aria-label', (i + 1) + '번째 안내'));
+    });
+    $('body').addClass('no-scroll');
+    $('#tour').prop('hidden', false);
+    showTourStep(0);
+  }
+
+  function endTour() {
+    $('#tour').prop('hidden', true);
+    $('body').removeClass('no-scroll');
+    markTourSeen(tourView);
+    // 안내가 끝나면 지금 탭의 맨 위로
+    window.scrollTo(0, 0);
+  }
+
+  function showTourStep(index) {
+    tourIndex = index;
+    const step = tourSteps[index];
+    const $target = $(step.target);
+    const text = step.text;
+    $('#tourDots .tour-dot').each(function (i) {
+      $(this).toggleClass('on', i === index);
+    });
+    $('#tourText').text(text);
+    if (!$target.length || !$target.is(':visible')) {
+      $('#tourSpot').attr('style', '').prop('hidden', true);
+      $('#tourLine').prop('hidden', true);
+      $('#tourTip').css({ top: '40%', bottom: '' });
+      return;
+    }
+    // 대상이 화면 가운데쯤 오도록 스크롤한 뒤 위치를 잼
+    const el = $target.get(0);
+    const absTop = el.getBoundingClientRect().top + window.pageYOffset;
+    window.scrollTo(0, Math.max(0, absTop - window.innerHeight * 0.3));
+    placeTourSpot(el, step.round, step.side);
+  }
+
+  // side: 'right' 이면 설명 글을 대상 오른쪽에 둠 (CP·CCTV 버튼처럼 위아래로 붙어 있는 버튼용)
+  function placeTourSpot(el, round, side) {
+    const r = el.getBoundingClientRect();
+    const pad = round ? 6 : 4;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const top = Math.max(2, r.top - pad);
+    const left = Math.max(2, r.left - pad);
+    const width = Math.min(vw - 4, r.width + pad * 2);
+    const height = r.height + pad * 2;
+    $('#tourSpot').prop('hidden', false).toggleClass('round', !!round).css({
+      top: top + 'px', left: left + 'px', width: width + 'px', height: height + 'px'
+    });
+    const lineLen = 28;
+    if (side === 'right') {
+      const midY = top + height / 2;
+      $('#tourLine').prop('hidden', false).addClass('flat').css({ left: (left + width) + 'px', top: midY + 'px', width: '22px', height: '' });
+      $('#tourTip').addClass('side').css({ left: (left + width + 30) + 'px', top: (midY - 14) + 'px', bottom: '' });
+      return;
+    }
+    $('#tourLine').removeClass('flat').css({ width: '' });
+    $('#tourTip').removeClass('side').css({ left: '' });
+    // 설명 글: 대상 아래 공간이 넉넉하면 아래, 아니면 위에. 선(28px)으로 이어 줌
+    const centerX = Math.min(vw - 24, Math.max(24, r.left + r.width / 2));
+    const below = (vh - (top + height)) > vh * 0.35;
+    if (below) {
+      $('#tourLine').prop('hidden', false).css({ left: centerX + 'px', top: (top + height) + 'px', height: lineLen + 'px' });
+      $('#tourTip').css({ top: (top + height + lineLen + 6) + 'px', bottom: '' });
+    } else {
+      $('#tourLine').prop('hidden', false).css({ left: centerX + 'px', top: (top - lineLen) + 'px', height: lineLen + 'px' });
+      $('#tourTip').css({ top: '', bottom: (vh - top + lineLen + 6) + 'px' });
+    }
+  }
+
+  function bindTour() {
+    // 화면 아무 곳이나 누르면 다음 단계 (마지막이면 닫기)
+    $('#tour').on('click', function (e) {
+      if ($(e.target).closest('.tour-dot, #tourClose').length) {
+        return;
+      }
+      if (tourIndex >= tourSteps.length - 1) {
+        endTour();
+      } else {
+        showTourStep(tourIndex + 1);
+      }
+    });
+    $('#tourDots').on('click', '.tour-dot', function () {
+      showTourStep(parseInt($(this).attr('data-i'), 10));
+    });
+    $('#tourClose').on('click', function () {
+      endTour();
+    });
+    // 화면 회전·크기 변경 시 강조 위치 다시 계산
+    $(window).on('resize', function () {
+      if (!$('#tour').prop('hidden')) {
+        showTourStep(tourIndex);
+      }
+    });
   }
 
   // ---------- 코스 지원 지점(CP) ----------
@@ -1048,8 +1213,10 @@
       scrollToRange(state.range, true);
     });
 
-    // 사용 안내 (반투명 배경 위에 안내 시트)
-    $('#helpOpen').on('click', openHelp);
+    // 사용 안내: ? 버튼 → 코치마크(화면 위에서 기능을 하나씩 짚어 주는 안내)
+    $('#helpOpen').on('click', function () {
+      startTour();
+    });
     $('#helpClose').on('click', closeHelp);
     $('#help').on('click', function (e) {
       if (e.target === this) {
@@ -1062,6 +1229,9 @@
       }
       if (e.key === 'Escape' && !$('#cctvSheet').prop('hidden')) {
         closeCctv();
+      }
+      if (e.key === 'Escape' && !$('#tour').prop('hidden')) {
+        endTour();
       }
     });
   }
