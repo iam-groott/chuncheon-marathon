@@ -195,7 +195,37 @@
     renderAidList();
     renderWxLegend();
     loadCctv();
+    renderRangeTabs();
     selectPoint(state.pointId, false);
+  }
+
+  // 시간별 예보 이동 버튼: 이미 오늘이 됐거나 지난 날의 버튼은 숨김 (오늘은 '현재'와 같으므로 필요 없음)
+  // - 23일까지: 현재 / 24일(토) / 25일(일)
+  // - 24일(토): 현재 / 25일(일)
+  // - 25일(일): 버튼 모두 숨김 (표가 지금 시각부터 시작하므로 이동할 곳이 없음)
+  function renderRangeTabs() {
+    const today = kstNowKey().substring(0, 10);
+    let dayButtons = 0;
+    $('#rangeTabs button').each(function () {
+      const range = RANGES[$(this).data('range')];
+      if (!range) {
+        return; // '현재' 버튼
+      }
+      const past = today >= range.date;
+      $(this).prop('hidden', past);
+      if (!past) {
+        dayButtons += 1;
+      }
+    });
+    // 날짜 버튼이 하나도 없으면 '현재'만 남으므로 버튼 줄 전체를 숨김
+    $('#rangeTabs').prop('hidden', dayButtons === 0);
+    // 선택돼 있던 버튼이 숨겨졌으면 '현재'로 되돌림
+    if (state.range !== 'now' && $('#rangeTabs button[data-range="' + state.range + '"]').prop('hidden')) {
+      state.range = 'now';
+    }
+    $('#rangeTabs button').each(function () {
+      $(this).toggleClass('on', $(this).data('range') === state.range);
+    });
   }
 
   // ---------- 상단 D-day ----------
