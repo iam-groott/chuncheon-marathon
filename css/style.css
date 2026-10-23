@@ -309,6 +309,8 @@ body {
 .hourly-head h2 { margin: 0; font-size: 0.95rem; font-weight: 800; white-space: nowrap; }
 
 .range-tabs { display: flex; gap: 5px; }
+/* 지난 날짜 버튼·버튼 줄 숨김 (display:flex 가 hidden 속성을 덮지 않게) */
+.range-tabs[hidden], .range-tabs button[hidden] { display: none; }
 .range-tabs button {
   min-height: 30px;
   padding: 0 10px;
