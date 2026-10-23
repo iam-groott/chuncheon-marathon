@@ -63,7 +63,9 @@ body {
 .top h1 { margin: 0; font-size: 1.1rem; font-weight: 800; letter-spacing: -0.02em; }
 .top-right { display: flex; align-items: center; gap: 8px; flex: none; }
 .help-btn {
-  display: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 28px;
   height: 28px;
   border: 1px solid #5a5a5a;
@@ -828,3 +830,93 @@ body.scroll-locked { position: fixed; left: 0; right: 0; width: 100%; overflow: 
 }
 .cs-msg[hidden] { display: none; }
 .cs-src { margin: 8px 0 0; font-size: 0.7rem; color: var(--text-sub); line-height: 1.4; }
+
+/* ---------- 사용 안내 (코치마크) ---------- */
+.tour { position: fixed; inset: 0; z-index: 3000; cursor: pointer; touch-action: none; }
+.tour[hidden] { display: none; }
+/* 강조 영역: 바깥을 아주 큰 그림자로 어둡게 칠해서 이 부분만 뚫린 것처럼 보이게 */
+.tour-spot {
+  position: fixed;
+  border: 3px solid #fff;
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.78);
+  pointer-events: none;
+  transition: top .25s ease, left .25s ease, width .25s ease, height .25s ease;
+}
+.tour-spot.round { border-radius: 50%; }
+.tour-spot[hidden] { display: block; box-shadow: none; border: none; background: rgba(0, 0, 0, 0.78); inset: 0; }
+.tour-line { position: fixed; width: 2px; margin-left: -1px; background: #fff; pointer-events: none; }
+.tour-line[hidden] { display: none; }
+/* 가로 선 (설명 글이 오른쪽에 올 때) */
+.tour-line.flat { height: 2px; margin-left: 0; margin-top: -1px; }
+.tour-tip.side { right: 16px; text-align: left; font-size: 1.05rem; }
+.tour-tip {
+  position: fixed;
+  left: 20px;
+  right: 20px;
+  margin: 0;
+  text-align: center;
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  white-space: pre-line;
+  word-break: keep-all; /* 한글은 단어 단위로 줄바꿈 */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+.tour-hint {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(66px + env(safe-area-inset-bottom));
+  margin: 0;
+  text-align: center;
+  font-size: 0.72rem;
+  color: #c8c8c8;
+  pointer-events: none;
+}
+.tour-foot {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 60px;
+  padding-bottom: env(safe-area-inset-bottom);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tour-dots { display: flex; gap: 10px; }
+.tour-dot {
+  width: 11px;
+  height: 11px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  opacity: .9;
+  cursor: pointer;
+}
+.tour-dot.on { background: #ffd400; opacity: 1; }
+.tour-dot:focus-visible { outline: 2px solid #ffd400; outline-offset: 3px; }
+/* 노란 동그라미 닫기 */
+.tour-close {
+  position: absolute;
+  right: 16px;
+  top: 6px;
+  width: 46px;
+  height: 46px;
+  border: none;
+  border-radius: 50%;
+  background: #ffd400;
+  color: #111;
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.tour-close:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .tour-spot { transition: none; } }
