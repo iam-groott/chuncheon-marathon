@@ -834,6 +834,8 @@ body.scroll-locked { position: fixed; left: 0; right: 0; width: 100%; overflow: 
 /* ---------- 사용 안내 (코치마크) ---------- */
 .tour { position: fixed; inset: 0; z-index: 3000; cursor: pointer; touch-action: none; }
 .tour[hidden] { display: none; }
+/* 안내 중에는 페이지 아래 여백을 늘려 footer 까지 화면 가운데로 올릴 수 있게 */
+body.tour-open { padding-bottom: 60vh; }
 /* 강조 영역: 바깥을 아주 큰 그림자로 어둡게 칠해서 이 부분만 뚫린 것처럼 보이게 */
 .tour-spot {
   position: fixed;
