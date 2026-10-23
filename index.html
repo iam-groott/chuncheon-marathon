@@ -148,6 +148,18 @@
   <div id="help" class="help" role="dialog" aria-modal="true" aria-labelledby="helpTitle" hidden>
   </div>
 
+  <!-- 사용 안내(코치마크): 화면을 어둡게 덮고 기능을 하나씩 강조해서 설명 -->
+  <div id="tour" class="tour" role="dialog" aria-modal="true" aria-label="사용 안내" hidden>
+    <div id="tourSpot" class="tour-spot" hidden></div>
+    <div id="tourLine" class="tour-line" hidden></div>
+    <p id="tourTip" class="tour-tip"><span id="tourText"></span></p>
+    <p class="tour-hint">화면을 누르면 다음 안내로 넘어가요</p>
+    <div class="tour-foot">
+      <div id="tourDots" class="tour-dots"></div>
+      <button type="button" id="tourClose" class="tour-close" aria-label="안내 닫기">&times;</button>
+    </div>
+  </div>
+
   <!-- CCTV 실시간 영상 (지도에서 CCTV를 누르면 아래에서 올라옴)
        열려 있는 동안은 뒤 화면을 반투명으로 덮어서 스크롤·지도 조작을 막고, 닫아야 다른 기능을 쓸 수 있음 -->
   <div id="cctvBackdrop" class="cctv-backdrop" hidden></div>
