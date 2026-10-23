@@ -723,7 +723,8 @@
       { target: '.now', text: '선택한 지점의 지금 날씨예요.\n기온·강수·습도·풍속을\n범례 색으로 보여 줘요.' },
       { target: '.tl-wrap', text: '표를 옆으로 밀면\n시간별 날씨를 볼 수 있어요.\n빨간 점선 칸이 대회 시간(07~15시)이에요.' },
       { target: '#viewTabs button[data-view=course]', text: '풀코스 정보에서\n고저도·CP·CCTV를 볼 수 있어요.' },
-      { target: '#helpOpen', round: true, text: '이 안내는 언제든\n? 버튼으로 다시 볼 수 있어요.' }
+      { target: '#helpOpen', round: true, text: '이 안내는 언제든\n? 버튼으로 다시 볼 수 있어요.' },
+      { target: '.foot-group:has(a[href*="instagram"])', text: '보러 와 주셔서 감사해요 :)\n모두 부상 없이 즐겁게 완주하세요!\nDesigned & Developed by @iam_groott' }
     ],
     course: [
       { target: '#aidToggle', side: 'right', text: 'CP 버튼으로\n급수대·스펀지 위치를\n켜고 끌 수 있어요.\n번호 마커를 누르면\n거리·고도, 현재 날씨,\n제공 품목이 나와요.' },
@@ -732,7 +733,8 @@
       { target: '#profWrap', text: '고저도를 손가락으로 밀면\n지도에 위치가 따라 움직여요.' },
       { target: '#aidList li:first-child', text: 'CP 정보 표의 줄을 누르면\n지도에서 그 CP 위치와\n날씨·제공 품목이 열려요.' },
       { target: '#resetBtn', text: '초기화를 누르면\n지도와 선택이 처음 상태로 돌아가요.' },
-      { target: '#helpOpen', round: true, text: '이 안내는 언제든\n? 버튼으로 다시 볼 수 있어요.' }
+      { target: '#helpOpen', round: true, text: '이 안내는 언제든\n? 버튼으로 다시 볼 수 있어요.' },
+      { target: '.foot-group:has(a[href*="instagram"])', text: '보러 와 주셔서 감사해요 :)\n모두 부상 없이 즐겁게 완주하세요!\nDesigned & Developed by @iam_groott' }
     ]
   };
   // 탭별로 '봤음'을 따로 기억 (예: ccm2026-tour-weather)
@@ -772,14 +774,15 @@
       $dots.append($('<button type="button" class="tour-dot"></button>')
         .attr('data-i', i).attr('aria-label', (i + 1) + '번째 안내'));
     });
-    $('body').addClass('no-scroll');
+    // tour-open: 페이지 아래에 여백을 줘서 맨 아래 footer 도 화면 위쪽으로 올려 강조할 수 있게 함
+    $('body').addClass('no-scroll tour-open');
     $('#tour').prop('hidden', false);
     showTourStep(0);
   }
 
   function endTour() {
     $('#tour').prop('hidden', true);
-    $('body').removeClass('no-scroll');
+    $('body').removeClass('no-scroll tour-open');
     markTourSeen(tourView);
     // 안내가 끝나면 지금 탭의 맨 위로
     window.scrollTo(0, 0);
@@ -794,6 +797,8 @@
       $(this).toggleClass('on', i === index);
     });
     $('#tourText').text(text);
+    // 마지막 단계에서는 '누르면 끝나요'로 안내
+    $('#tourHint').text(index >= tourSteps.length - 1 ? '화면을 누르면 안내가 끝나요' : '화면을 누르면 다음 안내로 넘어가요');
     if (!$target.length || !$target.is(':visible')) {
       $('#tourSpot').attr('style', '').prop('hidden', true);
       $('#tourLine').prop('hidden', true);
