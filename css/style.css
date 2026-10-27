@@ -525,7 +525,7 @@ body {
 
 .farewell { padding: 28px var(--pad) 8px; }
 .farewell[hidden] { display: none; }
-.fw-course { display: block; width: 168px; height: 168px; margin: 0 0 18px; }
+.fw-course { display: block; margin: 0 0 18px; width:100%; height:100%; }
 .fw-route {
   fill: none;
   stroke: var(--orange);
